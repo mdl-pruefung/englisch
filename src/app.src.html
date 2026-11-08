@@ -1100,7 +1100,7 @@ function viewLetter() {
       ${inp("pruefer2", "Zweitprüfer:in (optional)", "z. B. Herr Beispiel")}
       ${inp("raum", "Prüfungsraum (optional)", "z. B. 2.12")}
     </div>
-    <div class="field"><label for="m-text">Text des Schreibens (Anrede bis Dank; Name und Datum werden rechts neben die letzte Zeile gesetzt)</label><textarea id="m-text" data-meta="text" rows="7">${esc(m.text)}</textarea></div>
+    <div class="field"><label for="m-text">Text des Schreibens (Anrede bis Dank; Name und Datum werden rechts neben die letzte Zeile gesetzt)</label><textarea id="m-text" data-meta="text" rows="7" spellcheck="true" autocorrect="on" autocapitalize="sentences">${esc(m.text)}</textarea></div>
     <div class="row">
       <button class="btn" data-act="letter-docx">Schreiben ans Kollegium (Word)</button>
       <button class="btn secondary" data-act="notice-docx">Zeitplan für die Schüler (Word)</button>
@@ -1220,7 +1220,7 @@ function viewT1(st, ms) {
     <div class="grid1">
       <div>${inhaltColumn(st, 1)}</div>
       <div class="col-notes"><div class="colhead">Begründung / Stichworte</div>
-        <textarea class="protocol lines36" id="notes-1-${st.id}" data-notes="1|${st.id}" spellcheck="true" lang="en">${esc(st.t1.notes)}</textarea>
+        <textarea class="protocol lines36" id="notes-1-${st.id}" data-notes="1|${st.id}" spellcheck="true" autocorrect="on" autocapitalize="sentences">${esc(st.t1.notes)}</textarea>
         <span class="${f.cls}" id="fit-1-${st.id}">${f.txt}</span></div>
       <div>${darstTable(st, 1)}</div>
     </div>
@@ -1245,7 +1245,7 @@ function viewT2(g, ms) {
   const n = Math.max(1, Math.min(4, ms.length));
   return `
     <div class="t2names cols n${n}">${ms.map(st => { const f = fitText(st.t2.notes, 2); return `<div class="t2name"><span class="nm">${esc(fullName(st))}</span><span class="${f.cls}" id="fit-2-${st.id}">${f.txt}</span></div>`; }).join("")}</div>
-    <div class="cols n${n}">${ms.map(st => `<div class="pcol"><textarea class="protocol" id="notes-2-${st.id}" data-notes="2|${st.id}" spellcheck="true" lang="en" aria-label="Begründung / Stichworte ${esc(fullName(st))}">${esc(st.t2.notes)}</textarea></div>`).join("")}</div>
+    <div class="cols n${n}">${ms.map(st => `<div class="pcol"><textarea class="protocol" id="notes-2-${st.id}" data-notes="2|${st.id}" spellcheck="true" autocorrect="on" autocapitalize="sentences" aria-label="Begründung / Stichworte ${esc(fullName(st))}">${esc(st.t2.notes)}</textarea></div>`).join("")}</div>
     <h3>Bewertung Teil 2</h3>
     <div class="cols n${n}">${ms.map(st => `<div class="pcol">${miniGrid(st)}</div>`).join("")}</div>`;
 }
@@ -1273,7 +1273,7 @@ function formPart(st, part) {
     <div class="grid1">
       <div>${inhaltColumn(st, part)}</div>
       <div class="col-notes"><div class="colhead">Begründung / Stichworte</div>
-        <textarea class="protocol ${part == 1 ? "lines36" : ""}" id="notes-${part}-${st.id}" data-notes="${part}|${st.id}" spellcheck="true" lang="en">${esc(st["t" + part].notes)}</textarea>
+        <textarea class="protocol ${part == 1 ? "lines36" : ""}" id="notes-${part}-${st.id}" data-notes="${part}|${st.id}" spellcheck="true" autocorrect="on" autocapitalize="sentences">${esc(st["t" + part].notes)}</textarea>
         <span class="${f.cls}" id="fit-${part}-${st.id}">${f.txt}</span></div>
       <div>${darstTable(st, part)}</div>
     </div>
