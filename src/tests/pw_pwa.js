@@ -44,7 +44,7 @@ const srv = http.createServer((req, res) => {
   // Update: neue Version auf dem Server
   await ctx.setOffline(false);
   const f = path.join(SITE, "sek1", "index.html"); const orig = fs.readFileSync(f, "utf8");
-  fs.writeFileSync(f, orig.replace("</body></html>", "<!-- neu --></body></html>"));
+  fs.writeFileSync(f, orig.replace("</body></html>", "<!-- neu --></body></html>").replace(/const BUILD = "[^"]+"/, 'const BUILD = "test-neu"'));   // wie bei einer echten neuen Version
   await page.reload(); await page.waitForSelector("#app .card");
   const bar = await page.waitForSelector("#update-bar", { timeout: 15000 }).catch(() => null);
   check("Neue Version: Hinweis erscheint", !!bar);
