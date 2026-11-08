@@ -5,6 +5,7 @@ const [file, VAR, OUT, V10] = process.argv.slice(2);
 fs.mkdirSync(OUT, { recursive: true });
 let ok = 0, fail = 0;
 const check = (name, cond, info) => { if (cond) { ok++; console.log("OK   " + name); } else { fail++; console.log("FAIL " + name + (info ? "  →  " + info : "")); } };
+const IS_BETA = /Beta_/.test(path.basename(file));   // Beta-Ausgabe oder normale Teams-Ausgabe
 const url = f => "file://" + path.resolve(f);
 const NAMES = "Becker, Ida\nAdler, Tom\nCzerny, Lea\nDahl, Mia\nEngel, Jan\nFink, Ole\nGraf, Pia";
 
@@ -50,8 +51,8 @@ async function scoreAll(page, touch) {
     const { ctx, page } = await newPage(browser);
     await page.goto(url(file));
     await page.waitForSelector("#app .card");
-    check("Titel mit (Beta)", /\(Beta\)/.test(await page.title()), await page.title());
-    check("Beta-Kennzeichen sichtbar", await page.isVisible(".pill.beta"));
+    check(IS_BETA ? "Titel mit (Beta)" : "Titel ohne Beta", /\(Beta\)/.test(await page.title()) === IS_BETA, await page.title());
+    check(IS_BETA ? "Beta-Kennzeichen sichtbar" : "Kein Beta-Kennzeichen", (await page.isVisible(".pill.beta")) === IS_BETA);
     check("Keine Hinweise am Prüfungsnamen", !(await page.getAttribute("#exam-chip", "title")));
     await page.fill("#imp-paste", NAMES);
     await page.click('[data-act="imp-add"]');
@@ -76,7 +77,7 @@ async function scoreAll(page, touch) {
     const groups = await page.$$eval(".gcard[data-drop]:not(.pool)", els => els.length);
     check("Zufallsgruppen erstellt", groups >= 2, groups);
     const keys = await page.evaluate(() => Object.keys(localStorage));
-    check("Eigener Beta-Speicher", keys.length > 0 && keys.every(k => k.includes(".beta.")), keys.join(", "));
+    check(IS_BETA ? "Eigener Beta-Speicher" : "Speicher wie Version 1.0", keys.length > 0 && keys.every(k => k.includes(".beta.") === IS_BETA), keys.join(", "));
 
     // Antippen zum Verschieben
     const g1 = await page.$$eval(".gcard[data-drop]:not(.pool)", els => els.map(e => e.dataset.drop));

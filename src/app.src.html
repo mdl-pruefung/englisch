@@ -1980,38 +1980,17 @@ async function fillStudentDoc(st) {
   setText(form, "Gesamtpunkte", (r.a.total !== null || r.b.total !== null) ? String(r.points) : "", font);
   setText(form, "Gesamtnote", !r.complete ? "" : isQ() ? String(r.np) : GRADE_WORD[r.grade], font);
   const keys = isQ() ? NP_TABLE.map(x => x.np) : [1, 2, 3, 4, 5, 6], hit = isQ() ? r.np : r.grade;
-  // Notenstufe: nur die passende Markierung zeigen. Acrobat beachtet „verborgen“, die Apple-Vorschau (iPad/Mac) nicht –
-  // deshalb liegen nicht gewählte Markierungen zusätzlich außerhalb der Seite. Das Acrobat-Skript im Bogen wird so ergänzt,
-  // dass es bei späteren Änderungen in Acrobat die Markierung wieder an ihren Platz holt.
-  const OFF = [-300, -300, -290, -290], home = {};
+  // Notenstufe: Kreis und fett gedruckte Note sind schreibgeschützte Kontrollkästchen mit fertig gezeichnetem Inhalt –
+  // nur das passende wird angehakt. Das zeigen Acrobat, Apple-Vorschau, Browser und Kopierer gleich an.
   for (const k of keys) {
-    const shown = r.complete && hit === k;
-    for (const nm of ["Notenmarkierung_", "Notentext_"]) for (const w of form.getField(nm + k).acroField.getWidgets()) {
-      const rc = w.dict.lookup(PDFName.of("Rect")).asArray().map(x => x.asNumber());
-      home[nm + k] = [rc[0], rc[3], rc[2], rc[1]];           // Acrobat-Skript: links, oben, rechts, unten
-      w.dict.set(PDFName.of("F"), PDFNumber.of(shown ? 4 : 6));
-      w.dict.set(PDFName.of("Rect"), doc.context.obj(shown ? rc : OFF));
+    const st8 = r.complete && hit === k ? PDFName.of("On") : PDFName.of("Off");
+    for (const nm of ["Notenmarkierung_", "Notentext_"]) {
+      const af = form.getField(nm + k).acroField;
+      af.dict.set(PDFName.of("V"), st8);
+      for (const w of af.getWidgets()) w.dict.set(PDFName.of("AS"), st8);
     }
   }
-  patchGradeScript(form, home, OFF);
-  // übrige dauerhaft verborgene Felder (z. B. das Rechenfeld „Gesamtnote“) ebenfalls aus der Seite nehmen – sonst druckt die Apple-Vorschau sie über die Note
-  for (const f of form.getFields()) for (const w of f.acroField.getWidgets()) {
-    const F = w.dict.lookup(PDFName.of("F")); if (F && (F.asNumber() & 2) && !/^Noten(markierung|text)_/.test(f.getName())) w.dict.set(PDFName.of("Rect"), doc.context.obj(OFF));
-  }
   return doc;
-}
-function patchGradeScript(form, home, off) {
-  try {
-    const aa = form.getField("Gesamtnote").acroField.dict.lookup(PDFName.of("AA")); if (!aa) return;
-    const act = aa.lookup(PDFName.of("C")); if (!act) return;
-    const raw = act.lookup(PDFName.of("JS")); if (!raw) return;
-    let js = raw instanceof PDFLib.PDFRawStream ? new TextDecoder("latin1").decode(PDFLib.decodePDFRawStream(raw).decode()) : raw.decodeText();
-    const re = /if \((\w+) && \1\.display !== an\) \1\.display = an;/g;
-    if (!re.test(js) || /__mdlHome/.test(js)) return;
-    js = `var __mdlHome = ${JSON.stringify(home)}, __mdlOff = ${JSON.stringify([off[0], off[3], off[2], off[1]])};\n` +
-      js.replace(re, (m, f) => `if (${f}) { if (${f}.display !== an) ${f}.display = an; try { ${f}.rect = (an === display.visible) ? __mdlHome[${f}.name] : __mdlOff; } catch (e) {} }`);
-    act.set(PDFName.of("JS"), PDFLib.PDFHexString.fromText(js));
-  } catch (e) { /* Bogen bleibt dann wie bisher */ }
 }
 // Reihenfolge des Tages: Gruppen in Ablauf-Reihenfolge, darin Sitzordnung; danach Personen ohne Gruppe (alphabetisch)
 function scheduleOrder() {
