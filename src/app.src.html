@@ -912,7 +912,10 @@ function moveStudent(id, targetGroupId) {
 /* =====================================================================
    Ansichten
    ===================================================================== */
+// Sobald Namen in der Liste stehen, gibt es immer mindestens „Gruppe 1“ – kein Extra-Klick auf „+ Gruppe“ nötig
+function ensureFirstGroup() { if (S.students.length && !regularGroups().length) { S.groups.unshift(newGroup()); touchView(); } }
 function render() {
+  ensureFirstGroup();
   updateChip();
   updateBackupHint();
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.view === S.ui.view)));
@@ -1579,6 +1582,21 @@ document.addEventListener("click", async e => {
     case "letter-text-reset": S.meta.text = DEFAULT_BRIEFTEXT; touch(); render(); break;
   }
 });
+// Leeres Zeitfeld antippen/anklicken: sinnvollen Vorschlag eintragen – Gruppe 1 ab 8:00, danach im Anschluss an die vorige Gruppe
+const slotDur = g => SEK2 ? examDur() : durationFor(g.members.length || 3);
+function suggestedSlot(g, key) {
+  const reg = regularGroups(), i = reg.indexOf(g);
+  if (key === "end") return toMin(g.time) === null ? null : toMin(g.time) + slotDur(g);
+  if (g.nach) return null;
+  if (i === 0) return toMin("08:00") + (SEK2 ? examDur() : 0);   // Sek II: 8:00 beginnt die Vorbereitung der ersten Gruppe
+  const prev = reg[i - 1]; return prev && toMin(prev.end) !== null ? toMin(prev.end) : null;
+}
+document.addEventListener("pointerdown", e => {
+  const t = e.target.closest && e.target.closest('input[type="time"][data-gf]'); if (!t || t.value || t.disabled) return;
+  const [gid, key] = t.dataset.gf.split("|"); const g = S.groups.find(x => x.id === gid); if (!g || (key !== "time" && key !== "end")) return;
+  const m = suggestedSlot(g, key); if (m === null) return;
+  t.value = fromMin(m); t.dispatchEvent(new Event("change", { bubbles: true }));
+});
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && pickId) { pickId = null; render(); return; }
   if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-set][role=button]")) { e.preventDefault(); e.target.click(); }
@@ -1612,7 +1630,9 @@ document.addEventListener("change", async e => {
     noDateOk = false; touch();
     const wd = document.getElementById("datum-wd"); if (wd) wd.textContent = S.datum ? "· " + weekdayOf(S.datum) : "";
     return; }
-  if (t.dataset.gf) { const [gid, key] = t.dataset.gf.split("|"); const grp = S.groups.find(x => x.id === gid); if (grp) { grp[key] = t.type === "checkbox" ? t.checked : t.value; touch();
+  if (t.dataset.gf) { const [gid, key] = t.dataset.gf.split("|"); const grp = S.groups.find(x => x.id === gid); if (grp) { const oldTime = grp.time; grp[key] = t.type === "checkbox" ? t.checked : t.value; touch();
+      // Sek I: Ende passend zur Gruppengröße vorschlagen, solange es leer ist oder noch dem alten Vorschlag entspricht
+      if (!SEK2 && key === "time" && toMin(grp.time) !== null && (!grp.end || toMin(grp.end) <= toMin(grp.time) || (toMin(oldTime) !== null && toMin(grp.end) === toMin(oldTime) + slotDur(grp)))) { grp.end = fromMin(toMin(grp.time) + slotDur(grp)); const e = document.getElementById("ge-" + gid); if (e) e.value = grp.end; }
       if (SEK2 && key === "time" && toMin(grp.time) !== null) { grp.end = fromMin(toMin(grp.time) + examDur()); const e = document.getElementById("ge-" + gid); if (e) e.value = grp.end; }
       const lab = document.getElementById("gstd-" + gid); if (lab) lab.textContent = slotInfo(grp);
       refreshPauses();
