@@ -2124,7 +2124,7 @@ async function exportZip(onlyGroup, includeBlank) {
     await busy("ZIP-Datei wird gepackt …", null);
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
     const name = `Bewertungsboegen${includeBlank ? "_alle" : ""}${onlyGroup ? "_" + safeFileName(groupLabel(onlyGroup)) : ""}${S.datum ? "_" + formatDate(S.datum) : ""}.zip`;
-    await offerAndReport(name, blob, `Fertig: ${list.length} Bögen in „${name}“.`);
+    await offerAndReport(name, blob, `Fertig: ${list.length} ${list.length === 1 ? "Bogen" : "Bögen"} in „${name}“.`);
   } catch (err) { const m = `Erstellen fehlgeschlagen (${err && (err.message || err.code) || err}).`; flash(m, "err"); busyEnd(m, "err"); }
 }
 async function exportFilledPrint() {
