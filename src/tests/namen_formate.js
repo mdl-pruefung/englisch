@@ -20,6 +20,13 @@ const CASES = [
   ["Alles in einer Zeile mit ;", WANT.map(([l, f]) => `${l}, ${f}`).join("; ")],
   ["CSV mit Komma als Trenner", "Nachname,Vorname,Klasse\n" + WANT.map(([l, f]) => `${l},${f},10b`).join("\n")],
   ["Vorname Nachname mit „von“", "Lukas von der Heide\nIda Becker"],
+  ["Nummeriert mit Klammer/ohne Punkt", WANT.map(([l, f], i) => `${i + 1}) ${l}, ${f}`).join("\n")],
+  ["Excel: Spalte mit laufender Nr. ohne Überschrift", WANT.map(([l, f], i) => `${i + 1}\t${l}\t${f}`).join("\n")],
+  ["Namenszusätze in vielen Sprachen (Vorname Nachname)", "Lukas von der Heide\nSanne in het Veld\nJan van 't Hof\nMarco Di Stefano\nAnna Maria del Rosario\nBen Fischer\nLeonie de Vries"],
+  ["Schulprogramm: Zusatz am Vornamen („Heide, Lukas von der“)", "Heide, Lukas von der\nVeld, Sanne in het\nBecker, Ida"],
+  ["Schulprogramm: eigene Spalte „Namenszusatz“", "Nachname;Vorname;Namenszusatz;Klasse\nHeide;Lukas;von der;10b\nBecker;Ida;;10b"],
+  ["Ein einzelner Name als Excel-Zeile", "Becker\tIda"],
+  ["Ein einzelner Name „Becker, Ida“", "Becker, Ida"],
 ];
 
 (async () => {
@@ -45,6 +52,10 @@ const CASES = [
   for (const [label, text] of CASES) {
     let exp = null;
     if (label.includes("„von“")) exp = ["von der Heide|Lukas", "Becker|Ida"];
+    if (label.startsWith("Namenszusätze")) exp = ["von der Heide|Lukas", "in het Veld|Sanne", "van 't Hof|Jan", "Di Stefano|Marco", "del Rosario|Anna Maria", "Fischer|Ben", "de Vries|Leonie"];
+    if (label.includes("Heide, Lukas von der")) exp = ["von der Heide|Lukas", "in het Veld|Sanne", "Becker|Ida"];
+    if (label.includes("Namenszusatz“")) exp = ["von der Heide|Lukas", "Becker|Ida"];
+    if (label.startsWith("Ein einzelner")) exp = ["Becker|Ida"];
     await run(label, async p => { await p.fill("#imp-paste", text); }, exp);
   }
   // Dateien
@@ -59,7 +70,8 @@ const CASES = [
   fs.writeFileSync(csv8, "﻿Nachname;Vorname\r\n" + WANT.map(([l, f]) => `${l};${f}`).join("\r\n"), "utf8");
   await run("CSV-Datei UTF-8 mit BOM", async p => { await p.setInputFiles("#imp-file", csv8); });
   // Zwillinge mit gleichem Namen
-  await run("Zwei Personen mit gleichem Namen", async p => { await p.fill("#imp-paste", "Müller, Max\nMüller, Max\nBecker, Ida"); }, ["Müller|Max", "Müller|Max", "Becker|Ida"]);
+  // bewusst: versehentlich doppelt eingefügte Namen nur einmal übernehmen (echte Namensgleichheit von Hand ergänzen, z. B. „Müller, Max (2)“)
+  await run("Doppelt eingefügter Name wird nur einmal übernommen", async p => { await p.fill("#imp-paste", "Müller, Max\nMüller, Max\nBecker, Ida"); }, ["Müller|Max", "Becker|Ida"]);
   fs.writeFileSync(path.join(OUT, "namen_formate.json"), JSON.stringify(rows, null, 1));
   await browser.close();
 })().catch(e => { console.error(e); process.exit(2); });
