@@ -2001,8 +2001,8 @@ function scheduleOrder() {
 }
 // Formularfelder in den Seiteninhalt übernehmen (für die Druckfassung)
 function flattenForPrint(doc) {
-  for (const page of doc.getPages()) {
-    const annots = page.node.lookup(PDFName.of("Annots")); if (!annots) continue;
+  doc.getPages().forEach((page, pi) => {
+    const annots = page.node.lookup(PDFName.of("Annots")); if (!annots) return;
     let ops = "", n = 0;
     let xres = page.node.Resources().lookup(PDFName.of("XObject"));
     if (!xres) { xres = doc.context.obj({}); page.node.Resources().set(PDFName.of("XObject"), xres); }
@@ -2020,13 +2020,13 @@ function flattenForPrint(doc) {
       const bb = (nobj.dict || nobj).lookup(PDFName.of("BBox")); const b = bb ? bb.asArray().map(x => x.asNumber()) : [0, 0, rect[2] - rect[0], rect[3] - rect[1]];
       const bw = (b[2] - b[0]) || 1, bh = (b[3] - b[1]) || 1;
       const sx = (rect[2] - rect[0]) / bw, sy = (rect[3] - rect[1]) / bh;
-      const nm = `FlX${n++}`;
+      const nm = `FlX${pi}_${n++}`;   // Name je Seite eindeutig: Seiten können sich die Ressourcen teilen (Q-Bogen) – sonst überschreibt Seite 2 die Bilder von Seite 1
       xres.set(PDFName.of(nm), nref);
       ops += `q ${sx.toFixed(4)} 0 0 ${sy.toFixed(4)} ${(rect[0] - b[0] * sx).toFixed(3)} ${(rect[1] - b[1] * sy).toFixed(3)} cm /${nm} Do Q\n`;
     }
     if (ops) { const s = doc.context.stream(ops); page.node.addContentStream(doc.context.register(s)); }
     page.node.delete(PDFName.of("Annots"));
-  }
+  });
 }
 async function buildPrintPDF(entries, onStep) {
   const out = await PDFDocument.create();
