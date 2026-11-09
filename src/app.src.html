@@ -259,6 +259,7 @@ button.info { cursor: help; border: none; font: inherit; font-size: .74rem; }
 .safari-warn { max-width: 90rem; margin: 1rem auto 0; padding: .7rem 1rem; display: flex; gap: .75rem; align-items: center; border: 2px solid var(--rotstift); border-radius: 10px; color: var(--rotstift); background: var(--sheet); font-weight: 600; box-sizing: border-box; width: calc(100% - 32px); }
 .safari-warn[hidden] { display: none; }
 .safari-warn span { flex: 1; }
+.safari-warn.soft { border-color: var(--amber); color: var(--amber); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 /* Touch-Geräte (iPad): größere Tippflächen – am Laptop bleibt alles wie bisher */
 @media (pointer: coarse) {
@@ -284,6 +285,7 @@ button.info { cursor: help; border: none; font: inherit; font-size: .74rem; }
 </div>
 
 <div class="safari-warn" id="safari-warn" role="alert" hidden><span>Safari löscht gespeicherte Daten nach 7 Tagen ohne Nutzung – bitte Chrome/Edge verwenden oder nach jeder Sitzung sichern.</span><button class="btn quiet sm" id="safari-warn-x" aria-label="Hinweis ausblenden">×</button></div>
+<div class="safari-warn soft" id="private-warn" role="note" hidden><span>Bitte nicht im privaten Fenster verwenden – dort sind alle Eingaben nach dem Schließen weg.</span><button class="btn quiet sm" id="private-warn-never">Nicht mehr anzeigen</button><button class="btn quiet sm" id="private-warn-x" aria-label="Hinweis ausblenden">×</button></div>
 <main id="app" lang="de"></main>
 <script>
 // Safari (Mac, iPad, iPhone) begrenzt Websitedaten auf 7 Tage ohne Nutzung – deutlich warnen
@@ -295,6 +297,11 @@ button.info { cursor: help; border: none; font: inherit; font-size: .74rem; }
   if (__PWA__) el.querySelector("span").textContent = "Safari löscht gespeicherte Daten nach 7 Tagen ohne Nutzung. Bitte über „Teilen“ → „Zum Home-Bildschirm“ (Mac: „Zum Dock hinzufügen“) als App ablegen und nur von dort öffnen.";
   if (safari && !standalone) el.hidden = false;
   document.getElementById("safari-warn-x").addEventListener("click", () => { el.hidden = true; });
+  // Hinweis „kein privates Fenster“: bis „Nicht mehr anzeigen“ – gilt für alle drei Apps; im privaten Fenster vergisst der Browser das und zeigt ihn wieder
+  const pw = document.getElementById("private-warn"), PK = "mdlPruefung.hinweisPrivat";
+  try { if (localStorage.getItem(PK) !== "aus") pw.hidden = false; } catch (e) { pw.hidden = false; }
+  document.getElementById("private-warn-x").addEventListener("click", () => { pw.hidden = true; });
+  document.getElementById("private-warn-never").addEventListener("click", () => { pw.hidden = true; try { localStorage.setItem(PK, "aus"); } catch (e) {} });
 })();
 </script>
 <dialog id="exams-dlg" class="dlg dlg-wide" aria-labelledby="exams-dlg-t"></dialog>
