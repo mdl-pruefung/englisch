@@ -50,7 +50,8 @@ async function scoreGroup(page, notes1) {
   }
   // C) Zwei Geräte (Erst- und Zweitprüfer:in) mit derselben Prüfung
   {
-    const a = await (await browser.newContext({ acceptDownloads: true })).newPage(), b = await (await browser.newContext({ acceptDownloads: true })).newPage();
+    const mk = async () => { const c = await browser.newContext({ acceptDownloads: true }); await c.addInitScript({ path: path.join(__dirname, "picker_mock.js") }); return c.newPage(); };
+    const a = await mk(), b = await mk();
     await setup(a, "Becker, Ida\nAdler, Tom\nCzerny, Lea\nDahl, Mia\nEngel, Jan\nFink, Ole");
     const dl = async (pg, fn) => { const [d] = await Promise.all([pg.waitForEvent("download"), fn()]); const p = path.join(OUT, Date.now() + "_" + d.suggestedFilename()); await d.saveAs(p); return p; };
     const bk0 = await dl(a, () => a.click("#quick-backup"));

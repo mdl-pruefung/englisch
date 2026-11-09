@@ -774,7 +774,15 @@ const errMsg = text => ({ text, err: true });
 const msgHTML = (m, style) => m ? `<p class="status ${m.err ? "err" : "ok"}" role="status"${style ? ` style="${style}"` : ""}>${esc(m.err ? m.text : m)}</p>` : "";
 function flash(text, kind) { flashMsg = { text, kind }; const el = $("#flash"); if (el) { el.textContent = text; el.className = "status " + (kind || ""); } }
 
-async function offerFile(filename, blob) {
+// Ergebnis: "saved" (sicher gespeichert), "downloaded" (an den Browser übergeben – ob gespeichert, verrät er nicht), "declined" (abgebrochen)
+async function offerFile(filename, blob, opts = {}) {
+  // Daten-Backups: eigenes „Speichern unter“-Fenster (Chrome, Edge), damit die App erfährt, ob wirklich gespeichert wurde
+  if (opts.pick && canPickFile() && !window.claude?.use) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: filename, types: [{ description: opts.what || "Datei", accept: { [blob.type || "application/octet-stream"]: ["." + filename.split(".").pop()] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close(); return "saved";
+    } catch (e) { if (e && e.name === "AbortError") return "declined"; /* sonst (z. B. vom Browser gesperrt): normaler Download */ }
+  }
   let dl = null;
   try { dl = window.claude?.use ? await window.claude.use("downloads") : null; } catch (e) { dl = null; }
   if (dl) { try { await dl.save({ filename, data: blob }); return "saved"; } catch (e) { if (e && e.code === "declined") return "declined"; throw e; } }
@@ -782,8 +790,9 @@ async function offerFile(filename, blob) {
   const a = document.createElement("a"); a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
-  return "saved";
+  return "downloaded";
 }
+const DL_NOTE = "Download gestartet.";
 
 const measureCtx = document.createElement("canvas").getContext("2d");
 function linesNeeded(text, width, size) {
@@ -1557,15 +1566,15 @@ document.addEventListener("click", async e => {
     case "restore-dlg-go": { $("#restore-dlg").close(); const inp = document.getElementById(restoreTarget); if (inp) inp.click(); break; }
     case "quick-backup": case "backup-all": case "restore-dlg-backup":
       if (fileHandle && act === "quick-backup") { await writeBackupFile(); if (fileHandle) { busyEnd("Alle Prüfungen in die Sicherungsdatei geschrieben.", "ok"); break; } }
-      try { flushLocal(); const ex = allExams().filter(x => !isEmptyExam(x)); const r = await offerFile(backupName(), new Blob([backupJSON(ex)], { type: "application/json" }));
-        if (r === "saved") { markBackedUp(); const m = `${ex.length} ${ex.length === 1 ? "Prüfung" : "Prüfungen"} gesichert.`; busyEnd(m, "ok");
-          if (act === "restore-dlg-backup") { const el = $("#restore-dlg-msg"); el.textContent = "✓ Daten-Backup gespeichert. Jetzt die Sicherung auswählen."; el.hidden = false; }
-          else if ($("#exams-dlg").open) { examsMsg = m; openExams(); } } else busyEnd("Speichern abgebrochen.", "ok"); }
+      try { flushLocal(); const ex = allExams().filter(x => !isEmptyExam(x)); const r = await offerFile(backupName(), new Blob([backupJSON(ex)], { type: "application/json" }), { pick: true, what: "Daten-Backup" });
+        if (r === "saved" || r === "downloaded") { markBackedUp(); const m = `${ex.length} ${ex.length === 1 ? "Prüfung" : "Prüfungen"} gesichert.${r === "downloaded" ? " " + DL_NOTE : ""}`; busyEnd(m, "ok");
+          if (act === "restore-dlg-backup") { const el = $("#restore-dlg-msg"); el.textContent = r === "saved" ? "✓ Daten-Backup gespeichert. Jetzt die Sicherung auswählen." : "✓ Daten-Backup an den Browser übergeben (Download-Ordner). Jetzt die Sicherung auswählen."; el.hidden = false; }
+          else if ($("#exams-dlg").open) { examsMsg = m; openExams(); } } else busyEnd("Kein Backup gespeichert.", "ok"); }
       catch (err) { busyEnd("Sicherung konnte nicht gespeichert werden.", "err"); }
       break;
     case "exam-save": case "download-backup": {
       flushLocal(); const st = act === "download-backup" ? S : (actEl.dataset.eid === S.examId ? S : loadExam(actEl.dataset.eid)); if (!st) break;
-      try { const r = await offerFile(examBackupName(st), new Blob([backupJSON([st])], { type: "application/json" })); const m = r === "saved" ? `„${examLabel(st)}“ gesichert.` : "Speichern abgebrochen."; busyEnd(m, "ok"); if ($("#exams-dlg").open) { examsMsg = m; openExams(); } }
+      try { const r = await offerFile(examBackupName(st), new Blob([backupJSON([st])], { type: "application/json" }), { pick: true, what: "Sicherung" }); const m = r === "declined" ? "Keine Sicherung gespeichert." : `„${examLabel(st)}“ gesichert.${r === "downloaded" ? " " + DL_NOTE : ""}`; busyEnd(m, "ok"); if ($("#exams-dlg").open) { examsMsg = m; openExams(); } }
       catch (err) { busyEnd("Sicherung konnte nicht gespeichert werden.", "err"); }
       break; }
     case "exams-open": examsMsg = ""; renameId = null; nextId = null; pendingRestore = null; openExams(); break;
@@ -1607,7 +1616,7 @@ document.addEventListener("click", async e => {
     case "tpl-del": { const i = Number(actEl.dataset.i), list = slotTemplates();
       if (actEl.dataset.confirm !== "1") { actEl.dataset.confirm = "1"; actEl.textContent = "Löschen?"; actEl.classList.add("danger"); return; }
       const [gone] = list.splice(i, 1); storeTemplates(list); const wasDef = defaultTplName() === gone.name; if (wasDef) { try { localStorage.removeItem(TPL_DEF_KEY); } catch (e) {} } tplMsg = `„${gone.name}“ gelöscht${wasDef ? ` – Standard ist wieder „${BUILTIN_TPL}“` : ""}.`; render(); break; }
-    case "tpl-file": { const t = slotTemplates()[Number(actEl.dataset.i)]; try { const r = await offerFile(`Zeitraster_${safeFileName(t.name)}.json`, new Blob([JSON.stringify(Object.assign({ type: "zeitraster" }, t), null, 1)], { type: "application/json" })); if (r === "saved") { tplMsg = `„${t.name}“ als Datei gespeichert.`; render(); } } catch (e) { flash("Speichern nicht möglich.", "err"); } break; }
+    case "tpl-file": { const t = slotTemplates()[Number(actEl.dataset.i)]; try { const r = await offerFile(`Zeitraster_${safeFileName(t.name)}.json`, new Blob([JSON.stringify(Object.assign({ type: "zeitraster" }, t), null, 1)], { type: "application/json" })); if (r !== "declined") { tplMsg = `„${t.name}“ als Datei ${r === "saved" ? "gespeichert." : "erstellt. " + DL_NOTE}`; render(); } } catch (e) { flash("Speichern nicht möglich.", "err"); } break; }
     case "letter-docx": await exportLetter(false); break;
     case "notice-docx": await exportLetter(true); break;
     case "letter-text-reset": S.meta.text = DEFAULT_BRIEFTEXT; touch(); render(); break;
@@ -1904,7 +1913,7 @@ async function exportLetter(noticeOnly) {
     zip.file("docProps/core.xml", core);
     const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
     const name = `${noticeOnly ? "Zeitplan_Schueler" : "Schreiben_Kollegium"}_Pruefungen_${safeFileName(m.klasse)}_${formatDate(S.datum)}.docx`;
-    await offerAndReport(name, blob, `„${name}“ gespeichert.`);
+    await offerAndReport(name, blob, `„${name}“ erstellt.`);
   } catch (e) { const m = `Word-Datei konnte nicht erstellt werden (${e && e.message || e}).`; flash(m, "err"); busyEnd(m, "err"); }
 }
 
@@ -1915,7 +1924,7 @@ async function exportPlan() {
     students: S.students.map(s => ({ id: s.id, last: s.last, first: s.first, klasse: s.klasse, absent: s.absent })),
     groups: S.groups.map(g => ({ id: g.id, time: g.time, end: g.end, stunde: g.stunde, pauseAfter: g.pauseAfter, pauseLabel: g.pauseLabel, members: g.members, nach: g.nach, partner: g.partner, datum: g.datum || "" })) };
   const name = `Pruefungsplan${S.datum ? "_" + formatDate(S.datum) : ""}.json`;
-  try { const r = await offerFile(name, new Blob([JSON.stringify(plan, null, 1)], { type: "application/json" })); flash(r === "saved" ? `Prüfungsplan „${name}“ gespeichert.` : "Speichern abgebrochen.", r === "saved" ? "ok" : ""); }
+  try { const r = await offerFile(name, new Blob([JSON.stringify(plan, null, 1)], { type: "application/json" })); flash(r === "declined" ? "Speichern abgebrochen." : `Prüfungsplan „${name}“ ${r === "saved" ? "gespeichert." : "erstellt. " + DL_NOTE}`, r === "declined" ? "" : "ok"); }
   catch (e) { flash("Prüfungsplan konnte nicht gespeichert werden.", "err"); }
 }
 async function importPlan(file) {
@@ -2118,7 +2127,8 @@ function busyEnd(msg, kind) {
 async function offerAndReport(name, blob, okMsg) {
   busyEnd();
   const r = await offerFile(name, blob);
-  if (r === "saved") { flash(okMsg, "ok"); busyEnd(okMsg, "ok"); } else { flash("Speichern abgebrochen.", ""); busyEnd("Speichern abgebrochen.", "ok"); }
+  if (r === "declined") { flash("Speichern abgebrochen.", ""); busyEnd("Speichern abgebrochen.", "ok"); return; }
+  const m = r === "downloaded" ? `${okMsg} ${DL_NOTE}` : okMsg; flash(m, "ok"); busyEnd(m, "ok");
 }
 
 function fileBase(st) {
@@ -2134,7 +2144,7 @@ async function exportOne(st) {
     const doc = await fillStudentDoc(st);
     const bytes = await doc.save({ updateFieldAppearances: false, useObjectStreams: false });
     const name = `${fileBase(st)}.pdf`;
-    await offerAndReport(name, new Blob([bytes], { type: "application/pdf" }), `„${name}“ gespeichert.`);
+    await offerAndReport(name, new Blob([bytes], { type: "application/pdf" }), `„${name}“ erstellt.`);
   } catch (err) { const m = `PDF konnte nicht erstellt werden (${err && err.message || err}).`; flash(m, "err"); busyEnd(m, "err"); }
 }
 async function exportZip(onlyGroup, includeBlank) {
@@ -2155,7 +2165,7 @@ async function exportZip(onlyGroup, includeBlank) {
     await busy("ZIP-Datei wird gepackt …", null);
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
     const name = `Bewertungsboegen${includeBlank ? "_alle" : ""}${onlyGroup ? "_" + safeFileName(groupLabel(onlyGroup)) : ""}${S.datum ? "_" + formatDate(S.datum) : ""}.zip`;
-    await offerAndReport(name, blob, `Fertig: ${list.length} ${list.length === 1 ? "Bogen" : "Bögen"} in „${name}“.`);
+    await offerAndReport(name, blob, `„${name}“ mit ${list.length} ${list.length === 1 ? "Bogen" : "Bögen"} erstellt.`);
   } catch (err) { const m = `Erstellen fehlgeschlagen (${err && (err.message || err.code) || err}).`; flash(m, "err"); busyEnd(m, "err"); }
 }
 async function exportFilledPrint() {
@@ -2168,7 +2178,7 @@ async function exportFilledPrint() {
     for (let i = 0; i < n; i++) { await busy("Druck-PDF wird erstellt …", i / n * 0.6, `Bogen ${i + 1} von ${n}: ${fullName(list[i].st)}`); docs.push(await fillStudentDoc(list[i].st)); }
     const bytes = await buildPrintPDF(docs, (k, t) => k == null ? busy("Druck-PDF wird gespeichert …", null) : busy("Druck-PDF wird erstellt …", 0.6 + k / t * 0.4, `Seiten zusammenfügen: ${k} von ${t}`));
     const name = `Boegen_ausgefuellt_alphabetisch${S.datum ? "_" + formatDate(S.datum) : ""}.pdf`;
-    await offerAndReport(name, new Blob([bytes], { type: "application/pdf" }), `Druck-PDF mit ${n} Bögen (${n * 2} Seiten) gespeichert.`);
+    await offerAndReport(name, new Blob([bytes], { type: "application/pdf" }), `Druck-PDF mit ${n} ${n === 1 ? "Bogen" : "Bögen"} (${n * 2} Seiten) erstellt.`);
   } catch (err) { const m = `Druck-PDF fehlgeschlagen (${err && err.message || err}).`; flash(m, "err"); busyEnd(m, "err"); }
 }
 async function exportBlankPrint() {
@@ -2187,7 +2197,7 @@ async function exportBlankPrint() {
     }
     const bytes = await buildPrintPDF(docs, (k, t) => k == null ? busy("PDF wird gespeichert …", null) : busy("Bögen mit Namen werden erstellt …", 0.6 + k / t * 0.4, `Seiten zusammenfügen: ${k} von ${t}`));
     const name = `Boegen_leer_${S.printOrder === "alpha" ? "alphabetisch" : "Gruppen"}${S.datum ? "_" + formatDate(S.datum) : ""}.pdf`;
-    await offerAndReport(name, new Blob([bytes], { type: "application/pdf" }), `Druck-PDF mit ${n} Bögen gespeichert (${S.printOrder === "alpha" ? "alphabetisch" : "Gruppenreihenfolge"}).`);
+    await offerAndReport(name, new Blob([bytes], { type: "application/pdf" }), `Druck-PDF mit ${n} ${n === 1 ? "Bogen" : "Bögen"} erstellt (${S.printOrder === "alpha" ? "alphabetisch" : "Gruppenreihenfolge"}).`);
   } catch (err) { const m = `Druck-PDF fehlgeschlagen (${err && err.message || err}).`; flash(m, "err"); busyEnd(m, "err"); }
 }
 
@@ -2206,7 +2216,7 @@ async function exportXlsx(entries, label) {
   try {
     const r = await offerFile(name, new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     const open = rows.filter(e => !e.r.complete).length;
-    flash(r === "saved" ? `Notenliste „${name}“ gespeichert: ${rows.length - open} mit Note${open ? `, ${open} ohne (fehlt/unvollständig)` : ""}.` : "Speichern abgebrochen.", r === "saved" ? "ok" : "");
+    flash(r === "declined" ? "Speichern abgebrochen." : `Notenliste „${name}“ ${r === "saved" ? "gespeichert" : "erstellt"}: ${rows.length - open} mit Note${open ? `, ${open} ohne (fehlt/unvollständig)` : ""}.${r === "downloaded" ? " " + DL_NOTE : ""}`, r === "declined" ? "" : "ok");
   } catch (err) { flash("Notenliste konnte nicht gespeichert werden.", "err"); }
 }
 async function gradesFromPDFs(files) {

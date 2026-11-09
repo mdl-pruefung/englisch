@@ -49,6 +49,7 @@ const NOTE_T2 = [
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ acceptDownloads: true, locale: "de-DE", viewport: { width: 1440, height: 950 } });
+  await ctx.addInitScript({ path: path.join(__dirname, "picker_mock.js") });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", e => errors.push(String(e)));

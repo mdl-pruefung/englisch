@@ -11,6 +11,7 @@ const NAMES = "Becker, Ida\nAdler, Tom\nCzerny, Lea\nDahl, Mia\nEngel, Jan\nFink
 
 async function newPage(browser, opts = {}) {
   const ctx = await browser.newContext(Object.assign({ acceptDownloads: true, locale: "de-DE", viewport: { width: 1366, height: 900 } }, opts));
+  await ctx.addInitScript({ path: path.join(__dirname, "picker_mock.js") });
   const page = await ctx.newPage();
   page.errors = [];
   page.on("pageerror", e => page.errors.push(String(e)));
@@ -148,8 +149,15 @@ async function scoreAll(page, touch) {
     const zip = await download(page, () => page.click('[data-act="export-zip"]'));
     check("PDF-ZIP erzeugt", fs.statSync(zip).size > 50000, path.basename(zip));
 
-    // Daten-Backup
+    // Daten-Backup: erst im „Speichern unter“-Fenster abbrechen, dann speichern
+    check("Backup-Erinnerung aktiv (noch nie gesichert)", await page.$eval("#quick-backup", e => e.classList.contains("warn")));
+    await page.evaluate(() => { window.__pickerMode = "abort"; }); await page.click("#quick-backup"); await page.waitForTimeout(300);
+    check("Abbrechen: „Kein Backup gespeichert“", /Kein Backup gespeichert/.test(await page.textContent("body")));
+    check("Abbrechen: Erinnerung bleibt", await page.$eval("#quick-backup", e => e.classList.contains("warn")));
+    await page.evaluate(() => { window.__pickerMode = ""; });
     const bk = await download(page, () => page.click("#quick-backup"));
+    check("Gespeichert über das eigene „Speichern unter“-Fenster", (await page.evaluate(() => window.__pickerSaved)) === 1);
+    check("Gespeichert: Erinnerung weg", !(await page.$eval("#quick-backup", e => e.classList.contains("warn"))));
     const B = JSON.parse(fs.readFileSync(bk, "utf8"));
     check("Backup: Format 3, richtige App", B.format === 3 && B.app === { sek1: "mdl-sek1", ef: "mdl-ef", q: "mdl-q" }[VAR], `${B.format} ${B.app}`);
     fs.writeFileSync(path.join(OUT, "backup.json"), JSON.stringify(B));
