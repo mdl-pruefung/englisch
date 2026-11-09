@@ -632,9 +632,10 @@ function newExam(klasse, jahr) {
   resetTransient();
   storeExam(S, true); render(); window.scrollTo(0, 0);
 }
-const TRASH_DAYS = 30;
+const TRASH_DAYS = 548;                    // 18 Monate: im Folgejahr lässt sich Gelöschtes noch zurückholen
+const TRASH_LABEL = "18 Monate";
 function deleteExam(id) {
-  // in den Papierkorb: Daten bleiben gespeichert und sind 30 Tage wiederherstellbar
+  // in den Papierkorb: Daten bleiben gespeichert und sind 18 Monate wiederherstellbar
   if (id === S.examId) flushLocal();
   const ix = readIndex(); const ent = ix.exams.find(e => e.id === id);
   ix.exams = ix.exams.filter(e => e.id !== id);
@@ -702,7 +703,7 @@ function examsDialogHTML() {
       <button class="btn" data-act="exam-new">Neue Prüfung anlegen</button>
     </div>
     <ul class="tpl-list exam-list" style="margin-top:.9rem">${nextEnt ? nextFormHTML(nextEnt) : ""}${list.map(row).join("")}</ul>
-    ${trash.length ? `<details style="margin-top:.8rem"><summary>Papierkorb (${trash.length}) – ${TRASH_DAYS} Tage wiederherstellbar</summary>
+    ${trash.length ? `<details style="margin-top:.8rem"><summary>Papierkorb (${trash.length}) – ${TRASH_LABEL} wiederherstellbar</summary>
       <ul class="tpl-list">${trash.map(t => `<li><span class="tpl-name">${esc(t.label)}</span><span class="muted small">gelöscht am ${new Date(t.deleted).toLocaleDateString("de-DE")}</span>
         <span class="tpl-acts"><button class="btn quiet sm" data-act="trash-restore" data-eid="${t.id}">Zurückholen</button><button class="btn quiet sm" data-act="trash-purge" data-eid="${t.id}">Endgültig löschen</button></span></li>`).join("")}</ul></details>` : ""}
     <hr style="border:none;border-top:1px solid var(--line);margin:1rem 0">
@@ -1566,7 +1567,7 @@ document.addEventListener("click", async e => {
     case "exam-del": {
       if (actEl.dataset.confirm !== "1") { actEl.dataset.confirm = "1"; actEl.textContent = "In den Papierkorb?"; actEl.classList.add("danger"); return; }
       const ent = readIndex().exams.find(e => e.id === actEl.dataset.eid);
-      deleteExam(actEl.dataset.eid); render(); examsMsg = `„${ent ? ent.label : "Prüfung"}“ liegt im Papierkorb (${TRASH_DAYS} Tage wiederherstellbar).`; openExams(); break; }
+      deleteExam(actEl.dataset.eid); render(); examsMsg = `„${ent ? ent.label : "Prüfung"}“ liegt im Papierkorb (${TRASH_LABEL} wiederherstellbar).`; openExams(); break; }
     case "export-print": await exportFilledPrint(); break;
     case "export-xlsx": await exportXlsx(S.students.map(st => { const g = groupOf(st.id); return { last: st.last, first: st.first, klasse: st.klasse,
       note: st.absent && !hasScores(st) ? "fehlt – Nachprüfung" : (g && g.nach && !hasScores(st) ? "Nachprüfung ausstehend" : "unvollständig bewertet"), r: result(st) }; })); break;
